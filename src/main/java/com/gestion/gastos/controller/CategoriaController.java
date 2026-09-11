@@ -1,4 +1,4 @@
-package com.gestion.gastos;
+package com.gestion.gastos.controller;
 
 import java.util.List;
 
@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.gestion.gastos.model.Categoria;
-import com.gestion.gastos.model.Usuario;
-import com.gestion.gastos.repository.CategoriaRepository;
-import com.gestion.gastos.repository.UsuarioRepository;
+import com.gestion.gastos.service.CategoriaService;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -26,10 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 public class CategoriaController {
 
     @Autowired
-    private CategoriaRepository categoriaRepository;
-
-    @Autowired
-    private UsuarioRepository usuarioRepository;
+    private CategoriaService categoriaService;
 
     private Long usuarioId(HttpServletRequest request) {
         return (Long) request.getSession().getAttribute("usuarioId");
@@ -37,40 +32,27 @@ public class CategoriaController {
 
     @GetMapping
     public List<Categoria> listar(HttpServletRequest request) {
-        return categoriaRepository.findByUsuarioId(usuarioId(request));
+        return categoriaService.listar(usuarioId(request));
     }
 
     @PostMapping
     public ResponseEntity<Categoria> crear(@RequestBody Categoria categoria, HttpServletRequest request) {
-        Long uid = usuarioId(request);
-        if (categoriaRepository.findByUsuarioIdAndNombre(uid, categoria.getNombre()).isPresent()) {
+        Categoria guardada = categoriaService.crear(categoria, usuarioId(request));
+        if (guardada == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
         }
-        Usuario usuario = usuarioRepository.findById(uid).orElseThrow();
-        categoria.setUsuario(usuario);
-        Categoria guardada = categoriaRepository.save(categoria);
         return ResponseEntity.status(HttpStatus.CREATED).body(guardada);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Categoria> actualizar(@PathVariable Long id, @RequestBody Categoria datos, HttpServletRequest request) {
-        return categoriaRepository.findById(id)
-                .filter(c -> c.getUsuario().getId().equals(usuarioId(request)))
-                .map(categoria -> {
-                    categoria.setNombre(datos.getNombre());
-                    return ResponseEntity.ok(categoriaRepository.save(categoria));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Categoria actualizada = categoriaService.actualizar(id, datos, usuarioId(request));
+        return actualizada != null ? ResponseEntity.ok(actualizada) : ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id, HttpServletRequest request) {
-        return categoriaRepository.findById(id)
-                .filter(c -> c.getUsuario().getId().equals(usuarioId(request)))
-                .map(c -> {
-                    categoriaRepository.deleteById(id);
-                    return ResponseEntity.noContent().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        boolean eliminado = categoriaService.eliminar(id, usuarioId(request));
+        return eliminado ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
     }
 }

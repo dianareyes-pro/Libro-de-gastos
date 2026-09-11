@@ -1,13 +1,12 @@
-package com.gestion.gastos;
+package com.gestion.gastos.controller;
 
 import com.gestion.gastos.model.Usuario;
-import com.gestion.gastos.repository.UsuarioRepository;
+import com.gestion.gastos.service.UsuarioService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -18,41 +17,25 @@ import java.util.Map;
 public class AuthController {
 
     @Autowired
-    private UsuarioRepository usuarioRepository;
-
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private UsuarioService usuarioService;
 
     @PostMapping("/registro")
     public ResponseEntity<?> registrar(@RequestBody Map<String, String> datos) {
-        String username = datos.get("username");
-        String password = datos.get("password");
-        String nombre = datos.get("nombre");
+        UsuarioService.ResultadoRegistro resultado = usuarioService.registrar(
+                datos.get("username"), datos.get("password"), datos.get("nombre"));
 
-        if (username == null || password == null || nombre == null ||
-            username.isBlank() || password.isBlank() || nombre.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Todos los campos son obligatorios."));
+        if (!resultado.exito) {
+            HttpStatus status = "Ese usuario ya existe.".equals(resultado.error)
+                    ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+            return ResponseEntity.status(status).body(Map.of("error", resultado.error));
         }
-
-        if (usuarioRepository.findByUsername(username).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "Ese usuario ya existe."));
-        }
-
-        Usuario usuario = new Usuario();
-        usuario.setUsername(username);
-        usuario.setPassword(encoder.encode(password));
-        usuario.setNombre(nombre);
-        usuarioRepository.save(usuario);
-
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("mensaje", "Usuario creado correctamente."));
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> datos, HttpServletRequest request) {
-        String username = datos.get("username");
-        String password = datos.get("password");
-
-        Usuario usuario = usuarioRepository.findByUsername(username).orElse(null);
-        if (usuario == null || !encoder.matches(password, usuario.getPassword())) {
+        Usuario usuario = usuarioService.autenticar(datos.get("username"), datos.get("password"));
+        if (usuario == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Usuario o contraseña incorrectos."));
         }
 
