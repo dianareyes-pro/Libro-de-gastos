@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mi libro de gastos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="gastos.css">
+</head>
+<body>
+
+<div class="usuario-sesion" id="barraUsuario" style="display:none;">
+  <span id="nombreUsuario"></span>
+  <button class="btn-salir" onclick="cerrarSesion()">Cerrar sesión</button>
+</div>
+
+<div class="hoja" id="contenido" style="display:none;">
+
+  <div class="cabecera">
+    <div>
+      <h1>Mi libro de gastos</h1>
+      <div class="subtitulo">Registro personal de finanzas</div>
+    </div>
+    <div class="balance">
+      <span class="etiqueta">Balance del mes</span>
+      <span class="cifra" id="cifraBalanceMes">$0</span>
+      <div class="cifra-general">Balance general: <span id="cifraBalanceGeneral">$0</span></div>
+    </div>
+  </div>
+
+  <div class="seccion">
+    <h2>Categorías</h2>
+    <div class="lista-tags" id="listaCategorias"></div>
+    <form id="formCategoria" class="fila-form">
+      <input type="text" id="nombreCategoria" placeholder="Nombre de la nueva categoría" required>
+      <button type="submit" class="registrar">Agregar categoría</button>
+    </form>
+    <div id="mensajeCategoria" class="mensaje"></div>
+  </div>
+
+  <div class="seccion">
+    <h2>Ingresos <span class="subtotal" id="totalIngresos">$0</span></h2>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-fecha">Fecha</th>
+          <th>Descripción</th>
+          <th class="col-monto">Monto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="listaIngresos"></tbody>
+    </table>
+    <div class="vacio" id="vacioIngresos" style="display:none;">Todavía no has registrado ingresos.</div>
+    <form id="formIngreso" class="fila-form" style="margin-top:14px;">
+      <input type="text" id="descripcionIngreso" placeholder="Descripción (ej: Salario)" required>
+      <input type="number" id="montoIngreso" placeholder="Monto" step="0.01" min="0" required>
+      <button type="submit" class="registrar">Agregar ingreso</button>
+    </form>
+    <div id="mensajeIngreso" class="mensaje"></div>
+  </div>
+
+  <div class="seccion">
+    <h2>Pagos fijos mensuales</h2>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-dia">Día</th>
+          <th>Descripción</th>
+          <th>Categoría</th>
+          <th class="col-monto">Monto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="listaPagosFijos"></tbody>
+    </table>
+    <div class="vacio" id="vacioPagosFijos" style="display:none;">No tienes pagos fijos configurados.</div>
+    <form id="formPagoFijo" class="fila-form" style="margin-top:14px;">
+      <input type="text" id="descripcionPagoFijo" placeholder="Descripción (ej: Arriendo)" required>
+      <input type="number" id="montoPagoFijo" placeholder="Monto" step="0.01" min="0" required>
+      <input type="number" id="diaPagoFijo" placeholder="Día del mes" min="1" max="31" required>
+      <select id="categoriaPagoFijo">
+        <option value="">Categoría (opcional)</option>
+      </select>
+      <button type="submit" class="registrar">Agregar pago fijo</button>
+    </form>
+    <div id="mensajePagoFijo" class="mensaje"></div>
+  </div>
+
+  <div class="seccion">
+    <h2>Nuevo gasto</h2>
+    <form id="formGasto" class="fila-form">
+      <input type="text" id="descripcionGasto" placeholder="Descripción" required>
+      <input type="number" id="montoGasto" placeholder="Monto" step="0.01" min="0" required>
+      <select id="categoriaGasto" required>
+        <option value="">Categoría</option>
+      </select>
+      <button type="submit" class="registrar">Registrar gasto</button>
+    </form>
+    <div id="mensajeGasto" class="mensaje"></div>
+  </div>
+
+  <div class="seccion">
+    <h2>Registro de gastos <span class="subtotal" id="totalGastosRegistro">$0</span></h2>
+    <table>
+      <thead>
+        <tr>
+          <th class="col-fecha">Fecha</th>
+          <th>Descripción</th>
+          <th>Categoría</th>
+          <th class="col-monto">Monto</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="listaGastos"></tbody>
+    </table>
+    <div class="vacio" id="mensajeVacio" style="display:none;">
+      Aún no tienes gastos registrados. Agrega el primero arriba.
+    </div>
+  </div>
+
+</div>
+
+<script>
+const API_CATEGORIAS = '/api/categorias';
+const API_GASTOS = '/api/gastos';
+const API_INGRESOS = '/api/ingresos';
+const API_PAGOS_FIJOS = '/api/pagos-fijos';
+const API_BALANCE = '/api/balance';
+
+const PALETA_TAGS = [
+  { bg: 'var(--musgo-fondo)', texto: 'var(--musgo-texto)' },
+  { bg: 'var(--ambar-fondo)', texto: 'var(--ambar-texto)' },
+  { bg: 'var(--terracota-fondo)', texto: 'var(--terracota-texto)' },
+  { bg: 'var(--ciruela-fondo)', texto: 'var(--ciruela-texto)' },
+];
+
+function colorParaCategoria(id) {
+  return PALETA_TAGS[id % PALETA_TAGS.length];
+}
+
+function formatoMoneda(valor) {
+  return '$' + parseFloat(valor).toLocaleString('es-CO', { maximumFractionDigits: 0 });
+}
+
+function formatoFecha(iso) {
+  const [anio, mes, dia] = iso.split('-');
+  return `${dia}/${mes}`;
+}
+
+function tagHtml(nombre, id) {
+  const color = colorParaCategoria(id);
+  return `<span class="tag" style="background:${color.bg}; color:${color.texto};">${nombre}</span>`;
+}
+
+// ---------- Sesión ----------
+async function verificarSesion() {
+  const res = await fetch('/api/auth/sesion');
+  if (!res.ok) {
+    window.location.href = 'login.html';
+    return false;
+  }
+  const datos = await res.json();
+  document.getElementById('nombreUsuario').textContent = 'Hola, ' + datos.nombre;
+  document.getElementById('barraUsuario').style.display = 'flex';
+  document.getElementById('contenido').style.display = 'block';
+  return true;
+}
+
+async function cerrarSesion() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  window.location.href = 'login.html';
+}
+
+// ---------- Categorías ----------
+async function cargarCategorias() {
+  const res = await fetch(API_CATEGORIAS);
+  const categorias = await res.json();
+
+  const contenedor = document.getElementById('listaCategorias');
+  contenedor.innerHTML = '';
+  const selectGasto = document.getElementById('categoriaGasto');
+  const selectPagoFijo = document.getElementById('categoriaPagoFijo');
+  selectGasto.innerHTML = '<option value="">Categoría</option>';
+  selectPagoFijo.innerHTML = '<option value="">Categoría (opcional)</option>';
+
+  categorias.forEach(cat => {
+    const color = colorParaCategoria(cat.id);
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.style.background = color.bg;
+    tag.style.color = color.texto;
+    tag.innerHTML = `${cat.nombre}
+      <button title="Editar" onclick="editarCategoria(${cat.id}, '${cat.nombre.replace(/'/g, "\\'")}')">✎</button>
+      <button title="Eliminar" onclick="eliminarCategoria(${cat.id})">×</button>`;
+    contenedor.appendChild(tag);
+
+    [selectGasto, selectPagoFijo].forEach(select => {
+      const opcion = document.createElement('option');
+      opcion.value = cat.id;
+      opcion.textContent = cat.nombre;
+      select.appendChild(opcion);
+    });
+  });
+
+  if (categorias.length === 0) {
+    contenedor.innerHTML = '<span class="vacio" style="padding:0;">Todavía no has creado ninguna categoría.</span>';
+  }
+}
+
+async function editarCategoria(id, nombreActual) {
+  const nuevoNombre = prompt('Nuevo nombre de la categoría:', nombreActual);
+  if (nuevoNombre === null || nuevoNombre.trim() === '') return;
+
+  await fetch(`${API_CATEGORIAS}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre: nuevoNombre.trim() })
+  });
+  actualizarTodo();
+}
+
+// ---------- Ingresos ----------
+async function cargarIngresos() {
+  const res = await fetch(API_INGRESOS);
+  const ingresos = await res.json();
+
+  const tbody = document.getElementById('listaIngresos');
+  const vacio = document.getElementById('vacioIngresos');
+  tbody.innerHTML = '';
+  let total = 0;
+
+  ingresos.forEach(ing => {
+    total += parseFloat(ing.monto);
+    const fila = document.createElement('tr');
+    fila.innerHTML = `
+      <td class="col-fecha">${formatoFecha(ing.fecha)}</td>
+      <td>${ing.descripcion}</td>
+      <td class="col-monto">${formatoMoneda(ing.monto)}</td>
+      <td class="col-eliminar">
+        <button class="accion-editar" onclick='editarIngreso(${ing.id}, ${JSON.stringify(ing.descripcion)}, ${ing.monto})'>Editar</button>
+        <button class="accion-eliminar" onclick="eliminarIngreso(${ing.id})" title="Eliminar">×</button>
+      </td>
+    `;
+    tbody.appendChild(fila);
+  });
+
+  vacio.style.display = ingresos.length === 0 ? 'block' : 'none';
+  document.getElementById('totalIngresos').textContent = formatoMoneda(total);
+}
+
+async function editarIngreso(id, descripcionActual, montoActual) {
+  const nuevaDesc = prompt('Descripción del ingreso:', descripcionActual);
+  if (nuevaDesc === null) return;
+  const nuevoMontoStr = prompt('Monto:', montoActual);
+  if (nuevoMontoStr === null) return;
+  const nuevoMonto = parseFloat(nuevoMontoStr);
+  if (isNaN(nuevoMonto)) { alert('Monto inválido.'); return; }
+
+  await fetch(`${API_INGRESOS}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ descripcion: nuevaDesc.trim(), monto: nuevoMonto })
+  });
+  actualizarTodo();
+}
+
+// ---------- Pagos fijos ----------
+async function cargarPagosFijos() {
+  const res = await fetch(API_PAGOS_FIJOS);
+  const pagos = await res.json();
+
+  const tbody = document.getElementById('listaPagosFijos');
+  const vacio = document.getElementById('vacioPagosFijos');
+  tbody.innerHTML = '';
+
+  pagos.forEach(p => {
+    const fila = document.createElement('tr');
+    const estadoHtml = p.pagadoEsteMes
+      ? '<span class="estado pagado">Pagado</span>'
+      : '<span class="estado pendiente">Pendiente</span>';
+    const botonPagar = p.pagadoEsteMes
+      ? ''
+      : `<button class="accion-pagar" onclick="pagarPagoFijo(${p.id})">Marcar pagado</button>`;
+
+    fila.innerHTML = `
+      <td class="col-dia">Día ${p.diaPago}</td>
+      <td>${p.descripcion}</td>
+      <td class="col-categoria">${p.categoria ? tagHtml(p.categoria.nombre, p.categoria.id) : '—'} ${estadoHtml}</td>
+      <td class="col-monto">${formatoMoneda(p.monto)}</td>
+      <td class="col-accion">
+        ${botonPagar}
+        <button class="accion-editar" onclick='editarPagoFijo(${p.id}, ${JSON.stringify(p.descripcion)}, ${p.monto}, ${p.diaPago})'>Editar</button>
+        <button class="accion-eliminar" onclick="eliminarPagoFijo(${p.id})" title="Eliminar">×</button>
+      </td>
+    `;
+    tbody.appendChild(fila);
+  });
+
+  vacio.style.display = pagos.length === 0 ? 'block' : 'none';
+}
+
+async function editarPagoFijo(id, descripcionActual, montoActual, diaActual) {
+  const nuevaDesc = prompt('Descripción:', descripcionActual);
+  if (nuevaDesc === null) return;
+  const nuevoMontoStr = prompt('Monto:', montoActual);
+  if (nuevoMontoStr === null) return;
+  const nuevoMonto = parseFloat(nuevoMontoStr);
+  if (isNaN(nuevoMonto)) { alert('Monto inválido.'); return; }
+  const nuevoDiaStr = prompt('Día del mes (1-31):', diaActual);
+  if (nuevoDiaStr === null) return;
+  const nuevoDia = parseInt(nuevoDiaStr);
+  if (isNaN(nuevoDia) || nuevoDia < 1 || nuevoDia > 31) { alert('Día inválido.'); return; }
+
+  await fetch(`${API_PAGOS_FIJOS}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ descripcion: nuevaDesc.trim(), monto: nuevoMonto, diaPago: nuevoDia })
+  });
+  cargarPagosFijos();
+}
+
+// ---------- Gastos ----------
+async function cargarGastos() {
+  const res = await fetch(API_GASTOS);
+  const gastos = await res.json();
+
+  const tbody = document.getElementById('listaGastos');
+  const vacio = document.getElementById('mensajeVacio');
+  tbody.innerHTML = '';
+  let total = 0;
+
+  gastos.forEach(g => {
+    total += parseFloat(g.monto);
+    const fila = document.createElement('tr');
+    fila.innerHTML = `
+      <td class="col-fecha">${formatoFecha(g.fecha)}</td>
+      <td>${g.descripcion}</td>
+      <td class="col-categoria">${g.categoria ? tagHtml(g.categoria.nombre, g.categoria.id) : '—'}</td>
+      <td class="col-monto">${formatoMoneda(g.monto)}</td>
+      <td class="col-eliminar">
+        <button class="accion-editar" onclick='editarGasto(${g.id}, ${JSON.stringify(g.descripcion)}, ${g.monto})'>Editar</button>
+        <button class="accion-eliminar" onclick="eliminarGasto(${g.id})" title="Eliminar gasto">×</button>
+      </td>
+    `;
+    tbody.appendChild(fila);
+  });
+
+  vacio.style.display = gastos.length === 0 ? 'block' : 'none';
+  document.getElementById('totalGastosRegistro').textContent = formatoMoneda(total);
+}
+
+async function editarGasto(id, descripcionActual, montoActual) {
+  const nuevaDesc = prompt('Descripción del gasto:', descripcionActual);
+  if (nuevaDesc === null) return;
+  const nuevoMontoStr = prompt('Monto:', montoActual);
+  if (nuevoMontoStr === null) return;
+  const nuevoMonto = parseFloat(nuevoMontoStr);
+  if (isNaN(nuevoMonto)) { alert('Monto inválido.'); return; }
+
+  await fetch(`${API_GASTOS}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ descripcion: nuevaDesc.trim(), monto: nuevoMonto })
+  });
+  actualizarTodo();
+}
+
+// ---------- Balance ----------
+async function cargarBalance() {
+  const [resGeneral, resMensual] = await Promise.all([
+    fetch(`${API_BALANCE}/general`),
+    fetch(`${API_BALANCE}/mensual`)
+  ]);
+  const general = await resGeneral.json();
+  const mensual = await resMensual.json();
+
+  const cifraMes = document.getElementById('cifraBalanceMes');
+  cifraMes.textContent = formatoMoneda(mensual.balance);
+  cifraMes.className = 'cifra ' + (mensual.balance >= 0 ? 'positivo' : 'negativo');
+
+  document.getElementById('cifraBalanceGeneral').textContent = formatoMoneda(general.balance);
+}
+
+async function actualizarTodo() {
+  await Promise.all([cargarGastos(), cargarIngresos(), cargarPagosFijos(), cargarCategorias()]);
+  cargarBalance();
+}
+
+// ---------- Formularios ----------
+document.getElementById('formCategoria').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nombre = document.getElementById('nombreCategoria').value.trim();
+  const msg = document.getElementById('mensajeCategoria');
+  msg.textContent = ''; msg.className = 'mensaje';
+
+  const res = await fetch(API_CATEGORIAS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nombre })
+  });
+
+  if (res.status === 201) {
+    msg.textContent = 'Categoría agregada.'; msg.className = 'mensaje exito';
+    document.getElementById('nombreCategoria').value = '';
+    cargarCategorias();
+  } else if (res.status === 409) {
+    msg.textContent = 'Esa categoría ya existe.'; msg.className = 'mensaje error';
+  } else {
+    msg.textContent = 'No se pudo crear la categoría.'; msg.className = 'mensaje error';
+  }
+});
+
+document.getElementById('formGasto').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const descripcion = document.getElementById('descripcionGasto').value.trim();
+  const monto = document.getElementById('montoGasto').value;
+  const categoriaId = document.getElementById('categoriaGasto').value;
+  const msg = document.getElementById('mensajeGasto');
+  msg.textContent = ''; msg.className = 'mensaje';
+
+  if (!categoriaId) {
+    msg.textContent = 'Selecciona una categoría.'; msg.className = 'mensaje error';
+    return;
+  }
+
+  const res = await fetch(API_GASTOS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ descripcion, monto: parseFloat(monto), categoria: { id: parseInt(categoriaId) } })
+  });
+
+  if (res.status === 201) {
+    msg.textContent = 'Gasto registrado.'; msg.className = 'mensaje exito';
+    document.getElementById('formGasto').reset();
+    actualizarTodo();
+  } else {
+    msg.textContent = 'No se pudo registrar el gasto.'; msg.className = 'mensaje error';
+  }
+});
+
+document.getElementById('formIngreso').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const descripcion = document.getElementById('descripcionIngreso').value.trim();
+  const monto = document.getElementById('montoIngreso').value;
+  const msg = document.getElementById('mensajeIngreso');
+  msg.textContent = ''; msg.className = 'mensaje';
+
+  const res = await fetch(API_INGRESOS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ descripcion, monto: parseFloat(monto) })
+  });
+
+  if (res.status === 201) {
+    msg.textContent = 'Ingreso registrado.'; msg.className = 'mensaje exito';
+    document.getElementById('formIngreso').reset();
+    actualizarTodo();
+  } else {
+    msg.textContent = 'No se pudo registrar el ingreso.'; msg.className = 'mensaje error';
+  }
+});
+
+document.getElementById('formPagoFijo').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const descripcion = document.getElementById('descripcionPagoFijo').value.trim();
+  const monto = document.getElementById('montoPagoFijo').value;
+  const diaPago = document.getElementById('diaPagoFijo').value;
+  const categoriaId = document.getElementById('categoriaPagoFijo').value;
+  const msg = document.getElementById('mensajePagoFijo');
+  msg.textContent = ''; msg.className = 'mensaje';
+
+  const cuerpo = { descripcion, monto: parseFloat(monto), diaPago: parseInt(diaPago) };
+  if (categoriaId) cuerpo.categoria = { id: parseInt(categoriaId) };
+
+  const res = await fetch(API_PAGOS_FIJOS, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo)
+  });
+
+  if (res.status === 201) {
+    msg.textContent = 'Pago fijo agregado.'; msg.className = 'mensaje exito';
+    document.getElementById('formPagoFijo').reset();
+    cargarPagosFijos();
+  } else {
+    msg.textContent = 'No se pudo agregar el pago fijo.'; msg.className = 'mensaje error';
+  }
+});
+
+// ---------- Eliminar ----------
+async function eliminarCategoria(id) {
+  if (!confirm('¿Eliminar esta categoría?')) return;
+  await fetch(`${API_CATEGORIAS}/${id}`, { method: 'DELETE' });
+  cargarCategorias();
+}
+
+async function eliminarGasto(id) {
+  if (!confirm('¿Eliminar este gasto?')) return;
+  await fetch(`${API_GASTOS}/${id}`, { method: 'DELETE' });
+  actualizarTodo();
+}
+
+async function eliminarIngreso(id) {
+  if (!confirm('¿Eliminar este ingreso?')) return;
+  await fetch(`${API_INGRESOS}/${id}`, { method: 'DELETE' });
+  actualizarTodo();
+}
+
+async function eliminarPagoFijo(id) {
+  if (!confirm('¿Eliminar este pago fijo?')) return;
+  await fetch(`${API_PAGOS_FIJOS}/${id}`, { method: 'DELETE' });
+  cargarPagosFijos();
+}
+
+async function pagarPagoFijo(id) {
+  if (!confirm('¿Registrar el pago de este mes?')) return;
+  await fetch(`${API_PAGOS_FIJOS}/${id}/pagar`, { method: 'POST' });
+  actualizarTodo();
+}
+
+// ---------- Arranque ----------
+(async () => {
+  const conectado = await verificarSesion();
+  if (conectado) {
+    actualizarTodo();
+  }
+})();
+</script>
+
+</body>
+</html>
